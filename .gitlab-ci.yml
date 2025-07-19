@@ -1,0 +1,55 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DEPLOY_BRANCH: "master"
+
+test react:
+  stage: test
+  image: node:14
+  tags:
+    - docker
+  rules:
+    - if: '$CI_MERGE_REQUEST_ID != null || $CI_COMMIT_BRANCH == $DEPLOY_BRANCH'
+      when: always
+  before_script:
+    - cd example-app
+    - npm install
+  script:
+    - npx prettier --check .
+
+build react:
+  stage: build
+  image: node:14
+  tags:
+    - docker
+  rules:
+    - if: '$CI_MERGE_REQUEST_ID != null || $CI_COMMIT_BRANCH == $DEPLOY_BRANCH'
+      when: always
+  variables:
+    GENERATE_SOURCEMAP: "false"
+  before_script:
+    - cd example-app
+    - npm install
+  script:
+    - npm run build
+  after_script:
+    - tar -czvf example-app.tar.gz example-app/build
+  artifacts:
+    paths:
+      - example-app.tar.gz
+
+deploy:
+  stage: deploy
+  tags:
+    - shell
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $DEPLOY_BRANCH'
+      when: on_success
+  variables:
+    PORT: 8082
+  script:
+    - tar -xvf example-app.tar.gz
+    - docker-compose -p gitlab up --force-recreate -d
